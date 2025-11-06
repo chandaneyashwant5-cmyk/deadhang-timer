@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dead Hang Timer - Enhanced Version</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection/dist/movenet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            width: 100%;
+        }
+        
+        .camera-section {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .timer-section {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 20px;
+        }
+        
+        #video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        
+        .canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+        }
+        
+        .snapshot-container {
+            margin-top: 15px;
+            text-align: center;
+        }
+        
+        #snapshotCanvas {
+            max-width: 200px;
+            border-radius: 8px;
+            border: 2px solid white;
+            display: none;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            font-size: 1.2rem;
+        }
+        
+        .status-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #ff4757;
+        }
+        
+        .status-dot.active {
+            background: #2ed573;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .timer-display {
+            font-size: 5rem;
+            font-weight: bold;
+            margin: 20px 0;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        
+        .timer-display.running {
+            color: #2ed573;
+            animation: glow 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 10px #2ed573, 0 0 20px #2ed573; }
+            to { text-shadow: 0 0 15px #2ed573, 0 0 30px #2ed573; }
+        }
+        
+        .best-time {
+            font-size: 1.5rem;
+            margin: 10px 0;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #ff6b6b;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        #startBtn {
+            background: #2ed573;
+        }
+        
+        #resetBtn {
+            background: #ffa502;
+        }
+        
+        #soundToggle {
+            background: #3742fa;
+        }
+        
+        .instructions {
+            margin-top: 30px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            width: 100%;
+        }
+        
+        .instructions h2 {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+        }
+        
+        .debug-info {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        
+        .system-status {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .feature-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2ed573;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .timer-display {
+                font-size: 3.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Dead Hang Timer</h1>
+            <p class="subtitle">Automatically track your dead hang time using AI posture detection</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="camera-section">
+                <h2>Live Camera Feed</h2>
+                <div class="video-container">
+                    <video id="video" autoplay playsinline></video>
+                    <div class="canvas-container">
+                        <canvas id="canvas"></canvas>
+                    </div>
+                </div>
+                <div class="snapshot-container">
+                    <canvas id="snapshotCanvas"></canvas>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Click "Start Camera" to begin</span>
+                </div>
+                <div class="system-status" id="systemStatus">System: Ready</div>
+                <div class="debug-info" id="debugInfo">Debug info will appear here once camera starts</div>
+                <div class="feature-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="soundToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Sound Effects</span>
+                </div>
+                <div class="controls">
+                    <button id="startBtn">Start Camera</button>
+                    <button id="resetBtn">Reset Timer</button>
+                </div>
+            </div>
+            
+            <div class="timer-section">
+                <h2>Your Dead Hang Time</h2>
+                <div class="timer-display" id="timerDisplay">00:00.00</div>
+                <div class="best-time" id="bestTime">Best: 00:00.00</div>
+                <div class="session-stats">
+                    <p>Session Time: <span id="sessionTime">00:00.00</span></p>
+                    <p>Hangs Completed: <span id="hangCount">0</span></p>
+                    <p>Last Hang: <span id="lastHangTime">00:00.00</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h2>How to Use</h2>
+            <ol>
+                <li>Click "Start Camera" and allow camera access</li>
+                <li>Position yourself so your full body is visible</li>
+                <li>Raise your hands above your shoulders - timer starts automatically with a BEEP</li>
+                <li>Hold the position as long as you can</li>
+                <li>When you drop down, timer stops with a BEEP and takes a snapshot</li>
+                <li>Your best time will be saved until you reset</li>
+            </ol>
+            <p style="margin-top: 15px; text-align: center; opacity: 0.8;">
+                <strong>Tip:</strong> Make sure you're serving this page via HTTP (not file://) for camera access to work!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const snapshotCanvas = document.getElementById('snapshotCanvas');
+        const snapshotCtx = snapshotCanvas.getContext('2d');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const bestTimeDisplay = document.getElementById('bestTime');
+        const sessionTimeDisplay = document.getElementById('sessionTime');
+        const hangCountDisplay = document.getElementById('hangCount');
+        const lastHangTimeDisplay = document.getElementById('lastHangTime');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const debugInfo = document.getElementById('debugInfo');
+        const systemStatus = document.getElementById('systemStatus');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const soundToggle = document.getElementById('soundToggle');
+        
+        // Timer variables
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+        let isRunning = false;
+        let bestTime = 0;
+        let lastHangTime = 0;
+        let sessionStartTime = 0;
+        let sessionElapsedTime = 0;
+        let sessionInterval = null;
+        let hangCount = 0;
+        
+        // Pose detection variables
+        let detector = null;
+        let isDeadHang = false;
+        let lastDeadHangState = false;
+        let stableFrames = 0;
+        let shoulderAvgY = 0;
+        let wristAvgY = 0;
+        let ankleAvgY = 0;
+        let noPoseFrames = 0;
+        
+        // Audio context for sound effects
+        let audioContext = null;
+        
+        // Initialize the application
+        async function init() {
+            try {
+                systemStatus.textContent = 'System: Loading pose detection...';
+                
+                // Initialize audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Initialize pose detector
+                await initPoseDetector();
+                
+                // Set up event listeners
+                startBtn.addEventListener('click', startCamera);
+                resetBtn.addEventListener('click', resetTimer);
+                soundToggle.addEventListener('change', updateSoundSetting);
+                
+                // Initialize timer display
+                updateTimerDisplay();
+                updateBestTimeDisplay();
+                updateSessionStats();
+                
+                systemStatus.textContent = 'System: Ready - Click "Start Camera"';
+                
+            } catch (error) {
+                console.error('Error initializing application:', error);
+                systemStatus.textContent = 'System: Error initializing - ' + error.message;
+                statusText.textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        // Initialize the pose detector
+        async function initPoseDetector() {
+            if (typeof tf === 'undefined') {
+                throw new Error('TensorFlow.js not loaded');
+            }
+            
+            if (typeof poseDetection === 'undefined') {
+                throw new Error('Pose Detection library not loaded');
+            }
+            
+            if (!poseDetection.movenet) {
+                throw new Error('MoveNet model not loaded. Check script imports.');
+            }
+            
+            const model = poseDetection.SupportedModels.MoveNet;
+            detector = await poseDetection.createDetector(model, {
+                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+            });
+            
+            console.log('Pose detector initialized successfully');
+        }
+        
+        // Start camera and pose detection
+        async function startCamera() {
+            try {
+                systemStatus.textContent = 'System: Starting camera...';
+                statusText.textContent = 'Requesting camera access...';
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    snapshotCanvas.width = video.videoWidth;
+                    snapshotCanvas.height = video.videoHeight;
+                    
+                    systemStatus.textContent = 'System: Camera active - Detecting pose...';
+                    statusText.textContent = 'Camera active! Raise your hands to start timer.';
+                    
+                    detectPose();
+                    startSessionTimer();
+                });
+                
+                startBtn.disabled = true;
+                startBtn.textContent = 'Camera Active';
+                
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                systemStatus.textContent = 'System: Camera access failed';
+                statusText.textContent = 'Camera access denied. Please allow camera permissions and ensure you are using HTTP/HTTPS.';
+            }
+        }
+        
+        // Pose detection loop
+        async function detectPose() {
+            if (!detector) return;
+            
+            try {
+                const poses = await detector.estimatePoses(video);
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (poses.length > 0 && poses[0].keypoints) {
+                    const keypoints = poses[0].keypoints;
+                    
+                    drawKeypoints(keypoints);
+                    checkDeadHangPosition(keypoints);
+                    drawDebugLines();
+                    
+                    noPoseFrames = 0;
+                    systemStatus.textContent = 'System: Pose detected - ' + (isDeadHang ? 'HANGING' : 'READY');
+                } else {
+                    // No pose detected
+                    noPoseFrames++;
+                    systemStatus.textContent = 'System: No pose detected - Make sure you are visible';
+                    debugInfo.textContent = 'Waiting for pose detection...';
+                    
+                    // Auto-pause if no pose detected for 2 seconds
+                    if (noPoseFrames > 60 && isRunning) { // ~2 seconds at 30fps
+                        stopTimer();
+                        statusText.textContent = 'Auto-paused: No pose detected';
+                        playSound('pause');
+                    }
+                }
+                
+                requestAnimationFrame(detectPose);
+                
+            } catch (error) {
+                console.error('Error detecting pose:', error);
+                systemStatus.textContent = 'System: Pose detection error';
+                requestAnimationFrame(detectPose);
+            }
+        }
+        
+        // Draw pose keypoints on canvas
+        function drawKeypoints(keypoints) {
+            const connections = [
+                [5, 7], [7, 9], [6, 8], [8, 10],
+                [5, 6], [5, 11], [6, 12], [11, 12],
+                [11, 13], [13, 15], [12, 14], [14, 16]
+            ];
+            
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            
+            for (const [i, j] of connections) {
+                const kp1 = keypoints[i];
+                const kp2 = keypoints[j];
+                
+                if (kp1.score > 0.3 && kp2.score > 0.3) {
+                    ctx.beginPath();
+                    ctx.moveTo(kp1.x, kp1.y);
+                    ctx.lineTo(kp2.x, kp2.y);
+                    ctx.stroke();
+                }
+            }
+            
+            for (const keypoint of keypoints) {
+                if (keypoint.score > 0.3) {
+                    ctx.beginPath();
+                    ctx.arc(keypoint.x, keypoint.y, 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fill();
+                }
+            }
+        }
+        
+        // Check if user is in dead hang position
+        function checkDeadHangPosition(keypoints) {
+            const leftWrist = keypoints[9];
+            const rightWrist = keypoints[10];
+            const leftShoulder = keypoints[5];
+            const rightShoulder = keypoints[6];
+            const leftAnkle = keypoints[15];
+            const rightAnkle = keypoints[16];
+            
+            if (leftWrist.score > 0.3 && rightWrist.score > 0.3 && 
+                leftShoulder.score > 0.3 && rightShoulder.score > 0.3) {
+                
+                wristAvgY = (leftWrist.y + rightWrist.y) / 2;
+                shoulderAvgY = (leftShoulder.y + rightShoulder.y) / 2;
+                
+                // ADJUSTABLE SENSITIVITY: Change the -30 value to make detection stricter/looser
+                const armsExtended = wristAvgY < shoulderAvgY - 30;
+                
+                let feetOffGround = true;
+                if (leftAnkle.score > 0.3 && rightAnkle.score > 0.3) {
+                    ankleAvgY = (leftAnkle.y + rightAnkle.y) / 2;
+                    feetOffGround = ankleAvgY < canvas.height * 0.85;
+                }
+                
+                const newDeadHangState = armsExtended && feetOffGround;
+                
+                if (newDeadHangState === isDeadHang) {
+                    stableFrames = Math.min(stableFrames + 1, 10);
+                } else {
+                    stableFrames = Math.max(stableFrames - 1, 0);
+                }
+                
+                if (stableFrames >= 5) {
+                    isDeadHang = newDeadHangState;
+                }
+                
+                debugInfo.textContent = `Shoulder Y: ${shoulderAvgY.toFixed(1)} | Wrist Y: ${wristAvgY.toFixed(1)} | Ankle Y: ${ankleAvgY.toFixed(1)} | Stable: ${stableFrames} | Arms: ${armsExtended ? 'EXTENDED' : 'BENT'} | Feet: ${feetOffGround ? 'UP' : 'DOWN'}`;
+                
+            } else {
+                isDeadHang = false;
+                stableFrames = 0;
+                debugInfo.textContent = 'Not enough keypoints detected - Make sure shoulders and wrists are visible';
+            }
+            
+            updateTimerState();
+            updateStatusIndicator();
+        }
+        
+        // Draw debug lines for visualization
+        function drawDebugLines() {
+            ctx.strokeStyle = '#00ffff';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, shoulderAvgY);
+            ctx.lineTo(canvas.width, shoulderAvgY);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#ff00ff';
+            ctx.beginPath();
+            ctx.moveTo(0, wristAvgY);
+            ctx.lineTo(canvas.width, wristAvgY);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#ffff00';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height * 0.85);
+            ctx.lineTo(canvas.width, canvas.height * 0.85);
+            ctx.stroke();
+            
+            ctx.setLineDash([]);
+        }
+        
+        // Update timer based on dead hang state
+        function updateTimerState() {
+            if (isDeadHang && !lastDeadHangState) {
+                startTimer();
+                statusText.textContent = 'Dead Hang Detected - Timer Running! 💪';
+                playSound('start');
+            } else if (!isDeadHang && lastDeadHangState) {
+                stopTimer();
+                hangCount++;
+                lastHangTime = elapsedTime;
+                updateSessionStats();
+                
+                if (elapsedTime > bestTime) {
+                    bestTime = elapsedTime;
+                    updateBestTimeDisplay();
+                }
+                
+                statusText.textContent = `Hang completed! Time: ${formatTime(elapsedTime)}`;
+                playSound('stop');
+                takeSnapshot();
+            }
+            
+            lastDeadHangState = isDeadHang;
+        }
+        
+        // Take snapshot when hang completes
+        function takeSnapshot() {
+            snapshotCtx.drawImage(video, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+            snapshotCanvas.style.display = 'block';
+            
+            // Add timestamp to snapshot
+            snapshotCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            snapshotCtx.fillRect(0, snapshotCanvas.height - 30, snapshotCanvas.width, 30);
+            snapshotCtx.fillStyle = 'white';
+            snapshotCtx.font = '14px Arial';
+            snapshotCtx.fillText(`Hang Time: ${formatTime(lastHangTime)}`, 10, snapshotCanvas.height - 10);
+        }
+        
+        // Play sound effects
+        function playSound(type) {
+            if (!soundToggle.checked) return;
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            switch(type) {
+                case 'start':
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.3);
+                    break;
+                case 'stop':
+                    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                    break;
+                case 'pause':
+                    oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.2);
+                    break;
+            }
+        }
+        
+        // Update sound setting
+        function updateSoundSetting() {
+            if (soundToggle.checked && !audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        // Update status indicator
+        function updateStatusIndicator() {
+            if (isDeadHang) {
+                statusDot.classList.add('active');
+            } else {
+                statusDot.classList.remove('active');
+            }
+        }
+        
+        // Timer functions
+        function startTimer() {
+            if (!isRunning) {
+                startTime = Date.now() - elapsedTime;
+                timerInterval = setInterval(updateTimer, 10);
+                isRunning = true;
+                timerDisplay.classList.add('running');
+            }
+        }
+        
+        function stopTimer() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                timerDisplay.classList.remove('running');
+            }
+        }
+        
+        function resetTimer() {
+            stopTimer();
+            elapsedTime = 0;
+            lastHangTime = 0;
+            updateTimerDisplay();
+            snapshotCanvas.style.display = 'none';
+            statusText.textContent = 'Timer reset. Get ready for your next hang!';
+        }
+        
+        function updateTimer() {
+            elapsedTime = Date.now() - startTime;
+            updateTimerDisplay();
+        }
+        
+        function updateTimerDisplay() {
+            timerDisplay.textContent = formatTime(elapsedTime);
+        }
+        
+        function formatTime(time) {
+            const milliseconds = Math.floor(time % 1000);
+            const seconds = Math.floor((time / 1000) % 60);
+            const minutes = Math.floor((time / (1000 * 60)) % 60);
+            
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0').slice(0, 2)}`;
+        }
+        
+        function updateBestTimeDisplay() {
+            bestTimeDisplay.textContent = `Best: ${formatTime(bestTime)}`;
+        }
+        
+        // Session timer functions
+        function startSessionTimer() {
+            sessionStartTime = Date.now() - sessionElapsedTime;
+            sessionInterval = setInterval(updateSessionTimer, 10);
+        }
+        
+        function updateSessionTimer() {
+            sessionElapsedTime = Date.now() - sessionStartTime;
+            updateSessionStats();
+        }
+        
+        function updateSessionStats() {
+            sessionTimeDisplay.textContent = formatTime(sessionElapsedTime);
+            hangCountDisplay.textContent = hangCount;
+            lastHangTimeDisplay.textContent = formatTime(lastHangTime);
+        }
+        
+        // Initialize the application when the page loads
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
